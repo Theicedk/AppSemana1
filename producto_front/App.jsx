@@ -1,32 +1,46 @@
 import { useEffect, useState } from 'react';
-import { getAll, crear, actualizar, getVentas } from './productos-api';
+import axios from 'axios';
+import { crear, actualizar } from './productos-api';
 import ProductoForm from './ProductoForm';
 import ProductoList from './ProductoList';
-import VentasList from './VentasList';
+import VentaSection from './VentaSection';
 
 export default function App() {
   const [productos, setProductos] = useState([]);
-  const [ventas, setVentas] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const listarProductos = async () => {
     try {
       setLoading(true);
       setError('');
-      const data = await getAll();
-      setProductos(data);
-      const ventasData = await getVentas();
-      setVentas(ventasData);
-    } catch {
-      setError('No se pudo conectar con la API.');
+      const response = await axios.get('/api/productos');
+      setProductos(response.data);
+    } catch (error) {
+      console.error("Error al cargar productos", error);
+      if (error.response) {
+        // El servidor respondió con un código fuera del rango 2xx
+        const status = error.response.status;
+        if (status === 503) {
+          console.error("Desconexión: La base de datos no responde.");
+          alert("Sistema en mantenimiento o DB desconectada");
+        } else if (status === 429) {
+          console.error("Atochamiento: Demasiadas peticiones al circuito.");
+          alert("Servidor sobrecargado, intente en unos segundos");
+        }
+      } else if (error.request) {
+        // La petición se hizo pero no hubo respuesta
+        console.error("Error de red o Servidor apagado");
+        alert("Error de red o servidor no disponible");
+      }
+      setError('Error al conectar con el servidor.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { listarProductos(); }, []);
 
   const handleSubmit = async (data) => {
     try {
@@ -36,7 +50,7 @@ export default function App() {
       } else {
         await crear(data);
       }
-      load();
+      listarProductos();
     } catch {
       setError('Error al guardar el producto.');
     }
@@ -60,9 +74,9 @@ export default function App() {
           <ProductoList
             productos={productos}
             onEdit={setEditing}
-            onRefresh={load}
+            onRefresh={listarProductos}
           />
-          <VentasList ventas={ventas} />
+          <VentaSection onStockChanged={listarProductos} />
         </>
       )}
     </div>

@@ -27,4 +27,4 @@ export const vender = (id, cantidad) =>
   fetch(`${BASE}/${id}/vender/${cantidad}`, { method: 'POST' });
 
 export const getVentas = () =>
-  fetch(`/api/ventas`).then(r => r.json());
+  fetch('/api/ventas').then(r => r.json());
