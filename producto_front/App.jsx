@@ -4,8 +4,11 @@ import { crear, actualizar } from './productos-api';
 import ProductoForm from './ProductoForm';
 import ProductoList from './ProductoList';
 import VentaSection from './VentaSection';
+import { Login, Logout } from './LoginLogout';
+import { useAuth0 } from '@auth0/auth0-react';
 
 export default function App() {
+  const {user, isLoading,isAuthenticated,getAccessTokenSilently} = useAuth0();
   const [productos, setProductos] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,7 +18,19 @@ export default function App() {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get('/api/productos');
+      
+      let token;
+      try {
+        token = await getAccessTokenSilently();
+      } catch (tokenErr) {
+        console.error("Error obteniendo token de Auth0:", tokenErr);
+        setError('Error al autenticarse con Auth0. Por favor, intenta de nuevo.');
+        setLoading(false);
+        return;
+      }
+      
+      const config = {headers: {Authorization: `Bearer ${token}`}};
+      const response = await axios.get('/api/productos', config);
       setProductos(response.data);
     } catch (error) {
       console.error("Error al cargar productos", error);
@@ -40,15 +55,35 @@ export default function App() {
     }
   };
 
-  useEffect(() => { listarProductos(); }, []);
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      listarProductos();
+    }
+  }, [isAuthenticated, isLoading]);
 
   const handleSubmit = async (data) => {
+    let token;
+    try {
+      token = await getAccessTokenSilently();
+    } catch (tokenErr) {
+      console.error("Error obteniendo token de Auth0:", tokenErr);
+      setError('Error al autenticarse con Auth0. Por favor, intenta de nuevo.');
+      return;
+    }
+    
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
     try {
       if (editing) {
-        await actualizar(editing.id, data);
+        await actualizar(editing.id, data, config);
         setEditing(null);
       } else {
-        await crear(data);
+        await crear(data, config);
       }
       listarProductos();
     } catch {
@@ -59,24 +94,32 @@ export default function App() {
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>📦 Gestión de Productos</h1>
-
-      <ProductoForm
-        initial={editing}
-        onSubmit={handleSubmit}
-        onCancel={editing ? () => setEditing(null) : undefined}
-      />
-
-      {error && <p style={styles.error}>{error}</p>}
-      {loading ? (
-        <p style={{ textAlign: 'center' }}>Cargando...</p>
+      {!isAuthenticated ? (
+        <>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', color: '#1e3a8a' }}>Bienvenido, por favor inicia sesión para gestionar los productos</h2>
+          <Login></Login>
+        </>
       ) : (
         <>
-          <ProductoList
-            productos={productos}
-            onEdit={setEditing}
-            onRefresh={listarProductos}
+          <Logout></Logout>
+          <ProductoForm
+            initial={editing}
+            onSubmit={handleSubmit}
+            onCancel={editing ? () => setEditing(null) : undefined}
           />
-          <VentaSection onStockChanged={listarProductos} />
+          {error && <p style={styles.error}>{error}</p>}
+          {loading ? (
+            <p style={{ textAlign: 'center' }}>Cargando...</p>
+          ) : (
+            <>
+              <ProductoList
+                productos={productos}
+                onEdit={setEditing}
+                onRefresh={listarProductos}
+              />
+              <VentaSection onStockChanged={listarProductos} />
+            </>
+          )}
         </>
       )}
     </div>
